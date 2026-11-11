@@ -15,6 +15,9 @@ import android.view.Gravity
 import android.widget.*
 
 class MainActivity : Activity() {
+    private var betaMenuOpen = false
+    private var titleTaps = 0
+    private var lastTitleTap = 0L
     private val bg = 0xFF00070D.toInt(); private val cyan = 0xFF00E5FF.toInt(); private val fg = 0xFFE8F6FA.toInt(); private val dim = 0xFF7F9AA6.toInt()
 
     override fun onNewIntent(i: Intent) { super.onNewIntent(i); setIntent(i) }
@@ -44,7 +47,20 @@ class MainActivity : Activity() {
     private fun build() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(52), dp(18), dp(28)) }
         setContentView(ScrollView(this).apply { setBackgroundColor(bg); addView(root) })
-        root.addView(label("AIRPOINT", 30f, cyan, true)); root.addView(label("Control your phone with your hands or your face", 14f, dim))
+        val brand = label("AIRPOINT", 30f, cyan, true)
+        brand.setOnClickListener {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastTitleTap > 1800L) titleTaps = 0
+            lastTitleTap = now
+            titleTaps++
+            if (titleTaps >= 7) {
+                betaMenuOpen = !betaMenuOpen
+                titleTaps = 0
+                toast(if (betaMenuOpen) "Experimental features unlocked" else "Experimental menu hidden")
+                build()
+            }
+        }
+        root.addView(brand); root.addView(label("Control your phone with your hands or your face", 14f, dim))
 
         val on = HandService.running
         val c = card(); c.addView(label(if (on) (if (HandService.paused) "AIRPOINT IS PAUSED" else "AIRPOINT IS ON") else "AIRPOINT IS OFF", 20f, if (on && !HandService.paused) cyan else fg, true))
@@ -65,15 +81,36 @@ class MainActivity : Activity() {
             ap0.edit().putString("mode", key).apply()
             if (HandService.running) { stopService(Intent(this, HandService::class.java)); Handler(Looper.getMainLooper()).postDelayed({ startForegroundService(Intent(this, HandService::class.java)) }, 700) }
             Handler(Looper.getMainLooper()).postDelayed({ build() }, 900) }.also { }.apply { layoutParams = LinearLayout.LayoutParams(0, dp(52), 1f).apply { topMargin = dp(10); marginEnd = dp(6) } }) }
-        mode("Hand", "hand"); mode("Face", "face"); mode("Eyes", "eyes")
+        mode("Hand", "hand"); mode("Face", "face")
         mc.addView(modes); root.addView(mc)
-        if (eyes) {
-            val ec = card(); ec.addView(label("Eye tracking (experimental)", 16f, fg, true))
-            val done = ap0.getString("gaze", null) != null
-            ec.addView(label(if (done) "Calibrated. Recalibrate if the cursor drifts or you change how you hold the phone." else "Not calibrated yet. Prop the phone up, sit still, and follow nine dots with your eyes. It takes about 25 seconds.", 13f, dim))
-            ec.addView(btn(if (done) "Recalibrate" else "Calibrate now", !done) {
-                if (!camOn()) toast("Allow the camera first") else if (!accOn()) toast("Turn on Accessibility first") else startActivity(Intent(this, CalibrateActivity::class.java)) })
-            ec.addView(label("Expect roughly a thumb's width of accuracy at best. Use good light and hold the phone steady, 30 to 40 cm away. Click by opening your mouth or holding your gaze still.", 12f, dim))
+        if (betaMenuOpen) {
+            val ec = card(); ec.addView(label("EXPERIMENTAL LAB", 17f, cyan, true))
+            ec.addView(label("Beta features can be inaccurate and may behave unpredictably. Eye tracking uses the front camera and runs on-device.", 13f, dim))
+            val eyeEnabled = ap0.getString("mode", "hand") == "eyes"
+            ec.addView(Switch(this).apply {
+                text = "Enable eye control (beta)"; textSize = 14f; setTextColor(fg)
+                isChecked = eyeEnabled
+                setOnCheckedChangeListener { _, enabled ->
+                    ap0.edit().putString("mode", if (enabled) "eyes" else "hand").apply()
+                    if (HandService.running) {
+                        stopService(Intent(this@MainActivity, HandService::class.java))
+                        Handler(Looper.getMainLooper()).postDelayed({ startForegroundService(Intent(this@MainActivity, HandService::class.java)); build() }, 700)
+                    } else build()
+                }
+            })
+            val calibrated = ap0.getString("gaze", null) != null
+            ec.addView(label(if (calibrated) "Calibration saved. Recalibrate if tracking drifts or lighting/phone position changes." else "Not calibrated. Complete the nine-point calibration before using gaze to move the cursor.", 13f, dim))
+            ec.addView(btn(if (calibrated) "Calibrate / recalibrate eyes" else "Start nine-point calibration", !calibrated) {
+                if (!camOn()) toast("Allow the camera first")
+                else if (!accOn()) toast("Turn on Accessibility first")
+                else {
+                    ap0.edit().putString("mode", "eyes").apply()
+                    val wasRunning = HandService.running
+                    if (wasRunning) stopService(Intent(this, HandService::class.java))
+                    Handler(Looper.getMainLooper()).postDelayed({ startActivity(Intent(this, CalibrateActivity::class.java)); build() }, if (wasRunning) 700 else 0)
+                }
+            })
+            ec.addView(label("How it works: MediaPipe Face Landmarker tracks iris and eye landmarks; nine calibration targets train a personal gaze-to-screen mapping. Look at a target, then dwell or use facial gestures to click and navigate. Accuracy depends on lighting, camera angle, glasses and head movement.", 12f, dim))
             root.addView(ec)
         }
 
