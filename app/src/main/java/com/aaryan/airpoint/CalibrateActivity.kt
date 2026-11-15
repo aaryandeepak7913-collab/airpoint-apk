@@ -66,15 +66,15 @@ class CalibrateActivity : Activity() {
 }
 
 private class Dots(c: Context) : View(c) {
-    var x = -1f; var y = -1f; var msg = ""
+    var dotX = -1f; var dotY = -1f; var msg = ""
     private val t0 = SystemClock.uptimeMillis()
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 6f; color = 0xFF00E5FF.toInt() }
     private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB8F4FF.toInt(); textSize = 40f; textAlign = Paint.Align.CENTER }
-    fun set(nx: Float, ny: Float, m: String) { x = nx; y = ny; msg = m }
+    fun set(nx: Float, ny: Float, m: String) { dotX = nx; dotY = ny; msg = m }
     override fun onDraw(c: Canvas) {
         c.drawColor(0xFF00070D.toInt())
-        if (x >= 0f) { val p = 0.5f + 0.5f * sin((SystemClock.uptimeMillis() - t0) / 150f); c.drawCircle(x, y, 26f + 10f * p, ring); c.drawCircle(x, y, 11f, dot) }
+        if (dotX >= 0f) { val p = 0.5f + 0.5f * sin((SystemClock.uptimeMillis() - t0) / 150f); c.drawCircle(dotX, dotY, 26f + 10f * p, ring); c.drawCircle(dotX, dotY, 11f, dot) }
         val words = msg.split(" "); var line = ""; var yy = height * 0.45f
         for (w in words) { if (txt.measureText("$line $w") > width * 0.85f) { c.drawText(line, width / 2f, yy, txt); yy += 54f; line = w } else line = if (line.isEmpty()) w else "$line $w" }
         c.drawText(line, width / 2f, yy, txt)
